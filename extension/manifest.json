@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Newspaper Columns",
+  "version": "1.0",
+  "description": "Read any article in a paginated 3-column newspaper layout. Alt+R to toggle.",
+  "permissions": ["scripting", "activeTab"],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+R",
+        "mac": "Alt+R"
+      },
+      "description": "Toggle newspaper columns reader"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Newspaper Columns (Alt+R — customise in chrome://extensions/shortcuts)"
+  }
+}
