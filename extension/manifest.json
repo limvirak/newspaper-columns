@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Newspaper Columns",
   "version": "1.0",
-  "description": "Read any article in a paginated 3-column newspaper layout. Alt+R to toggle.",
-  "permissions": ["scripting", "activeTab"],
+  "description": "Read any article in a paginated newspaper-column layout. Alt+R to toggle; F/−+/C/B to adjust font, size, columns, theme.",
+  "permissions": ["scripting", "activeTab", "storage"],
   "commands": {
     "_execute_action": {
       "suggested_key": {
