@@ -21,6 +21,10 @@ function setIcon() {
 
 chrome.runtime.onInstalled.addListener(setIcon);
 chrome.runtime.onStartup.addListener(setIcon);
+// Also draw on every service-worker activation. MV3 workers are ephemeral and
+// there is no static default_icon, so relying on onInstalled/onStartup alone
+// lets Chrome fall back to the default letter badge after a reload or eviction.
+setIcon();
 
 // Toolbar button click (shortcut via _execute_action fires this too).
 // Load saved settings first, then inject the reader with them as an argument
