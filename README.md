@@ -8,8 +8,10 @@ Available as both a **Chrome extension** (recommended) and a **bookmarklet**.
 
 ## Features
 
-- Extracts article text, strips everything else (images, ads, nav, sidebars, cookie banners, comments)
+- Extracts the article, keeping its **images, figures, and inline SVG charts** in place (lazy-loaded images are resolved); strips ads, nav, sidebars, cookie banners, comments
+- Preserves inline emphasis — **bold**, *italic*, <mark>highlighted</mark> runs, and links — including inside headings
 - Paginated columns fill the full viewport — no vertical scrolling
+- `I` toggles images off for a pure-text reading mode
 - **Auto** column count scales to your window width (or pick 1–4 manually)
 - Adjust **font**, **size**, **columns**, and **theme** on the fly — choices are remembered
 - Re-flows automatically when you resize the window
@@ -26,7 +28,10 @@ Available as both a **Chrome extension** (recommended) and a **bookmarklet**.
 | `−` / `+` | Decrease / increase font size (13–24px) |
 | `C` | Cycle columns — Auto · 1 · 2 · 3 · 4 |
 | `B` | Cycle theme — Cream · White · Sepia · Night |
+| `I` | Toggle images on / off |
 | `Esc` / `✕` | Close |
+
+> **On highlighted titles:** emphasis carried by real tags (`<strong>`, `<em>`, `<mark>`, links) is preserved. Highlighting done purely with CSS classes (no semantic tag) can't be carried over, since the reader deliberately drops the page's stylesheets.
 
 Settings persist via `chrome.storage` in the extension (global, across all sites) and via `localStorage` in the bookmarklet (per site).
 

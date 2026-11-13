@@ -67,13 +67,13 @@ function toggleNewspaperColumns(S, MODE) {
     { label: 'Iowan', css: '"Iowan Old Style", "Palatino Linotype", Palatino, serif', lh: 1.75 },
   ];
   const THEMES = [
-    { label: 'Cream', bg: '#fdf9f3', fg: '#1a1a1a', muted: '#aaa', rule: '#e8e4dc', quote: '#555', bar: '#ccc' },
-    { label: 'White', bg: '#ffffff', fg: '#111111', muted: '#bbb', rule: '#eeeeee', quote: '#555', bar: '#ddd' },
-    { label: 'Sepia', bg: '#f4ecd8', fg: '#5b4636', muted: '#a09078', rule: '#e3d9c2', quote: '#6b5746', bar: '#cbbb9a' },
-    { label: 'Night', bg: '#1a1a1a', fg: '#d4cfc5', muted: '#666', rule: '#333', quote: '#9a948a', bar: '#444' },
+    { label: 'Cream', bg: '#fdf9f3', fg: '#1a1a1a', muted: '#9c968c', rule: '#e8e4dc', quote: '#555', bar: '#ccc', hi: '#fce9a6' },
+    { label: 'White', bg: '#ffffff', fg: '#111111', muted: '#9aa0a6', rule: '#eeeeee', quote: '#555', bar: '#ddd', hi: '#fff1a8' },
+    { label: 'Sepia', bg: '#f4ecd8', fg: '#5b4636', muted: '#a09078', rule: '#e3d9c2', quote: '#6b5746', bar: '#cbbb9a', hi: '#e4cf92' },
+    { label: 'Night', bg: '#1a1a1a', fg: '#d4cfc5', muted: '#777', rule: '#333', quote: '#9a948a', bar: '#444', hi: '#4a4120' },
   ];
   const MINS = 13, MAXS = 24;
-  const DEFAULTS = { font: 0, size: 17, cols: 0, theme: 0 };
+  const DEFAULTS = { font: 0, size: 17, cols: 0, theme: 0, images: 1 };
 
   function load() {
     let saved = {};
@@ -87,6 +87,7 @@ function toggleNewspaperColumns(S, MODE) {
     out.theme = (out.theme % THEMES.length + THEMES.length) % THEMES.length;
     out.size = Math.min(MAXS, Math.max(MINS, out.size | 0));
     out.cols = Math.min(6, Math.max(0, out.cols | 0));
+    out.images = out.images ? 1 : 0;
     return out;
   }
   function save() {
@@ -98,36 +99,83 @@ function toggleNewspaperColumns(S, MODE) {
   }
   const st = load();
 
-  // --- Text extraction ---
-  const src = document.querySelector(
-    'article, .article-body, .article__body, .story-body, ' +
-    '.post-content, .entry-content, .content-body, main'
-  ) || document.body;
+  // --- Text + image extraction ----------------------------------------------
+  // Walk the best content container in document order so images and graphs stay
+  // interleaved with the text they belong to. Blocks (headings, paragraphs,
+  // blockquotes, figures) are emitted whole so their inline emphasis
+  // (<strong>, <em>, <mark>, links) is preserved; other containers are
+  // descended into so standalone images aren't missed.
+  const noise = /advert|promo|related|share|social|newsletter|subscri|sidebar|widget|banner|cookie|comment|disqus|taboola|outbrain|newsletter|paywall|metadata|byline/;
+  const SKIP = /^(nav|aside|header|footer|form|script|style|noscript|iframe|video|audio|embed|canvas|button|input|select|textarea)$/;
+  const BLOCK = /^(h[1-6]|p|blockquote)$/;
 
-  const clone = src.cloneNode(true);
+  // Copy real image URLs out of lazy-loading attributes onto src/srcset.
+  function unlazy(root) {
+    root.querySelectorAll('img').forEach(im => {
+      const ds = im.getAttribute('data-src') || im.getAttribute('data-lazy-src') || im.getAttribute('data-original') || im.getAttribute('data-hi-res-src');
+      const cur = im.getAttribute('src') || '';
+      if (ds && (!cur || /^data:image\/(gif|svg)|blank|placeholder|spacer|1x1/i.test(cur))) im.setAttribute('src', ds);
+      const dss = im.getAttribute('data-srcset');
+      if (dss && !im.getAttribute('srcset')) im.setAttribute('srcset', dss);
+      im.removeAttribute('loading'); im.removeAttribute('class'); im.removeAttribute('style');
+    });
+  }
+  // Clone a live element and sanitise it (drop nested junk, un-lazy images).
+  function clean(el) {
+    const c = el.cloneNode(true);
+    c.querySelectorAll('script, style, noscript, button, input').forEach(n => n.remove());
+    unlazy(c);
+    return c;
+  }
+  // Keep standalone images only if they render reasonably large (skips icons,
+  // tracking pixels, logos) or sit inside a <figure>.
+  function keepImg(el) {
+    const r = el.getBoundingClientRect();
+    return (r.width >= 120 && r.height >= 80) || !!el.closest('figure');
+  }
 
-  clone.querySelectorAll(
-    'img, picture, figure, figcaption, video, audio, iframe, embed, ' +
-    'nav, aside, header, footer, form, button, input, select, textarea, ' +
-    'script, style, noscript, svg, canvas'
-  ).forEach(n => n.remove());
-
-  const noise = /advert|promo|related|share|social|newsletter|subscri|sidebar|widget|banner|cookie|comment|disqus|taboola|outbrain/;
-  clone.querySelectorAll('[class], [id]').forEach(el => {
-    const cn = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-    const id = (el.id || '').toLowerCase();
-    if (noise.test(cn) || noise.test(id)) el.remove();
-  });
-
-  const tags = clone.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote');
-  let html = '';
-  tags.forEach(el => {
-    if (el.textContent.trim().length > 30) {
-      const tag = el.tagName.toLowerCase();
-      html += `<${tag}>${el.innerHTML.trim()}</${tag}>`;
-    }
-  });
-  if (!html) html = `<p>${clone.textContent.replace(/\s+/g, ' ').trim()}</p>`;
+  function extract() {
+    const src = document.querySelector(
+      'article, .article-body, .article__body, .story-body, ' +
+      '.post-content, .entry-content, .content-body, main'
+    ) || document.body;
+    let out = '';
+    (function walk(node) {
+      const kids = node.children;
+      for (let i = 0; i < kids.length; i++) {
+        const el = kids[i];
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'svg') {
+          if (st.images && el.getBoundingClientRect().width >= 120) out += `<figure class="_npimg">${el.outerHTML}</figure>`;
+          continue;
+        }
+        if (SKIP.test(tag)) continue;
+        const cn = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+        if (noise.test(cn) || noise.test((el.id || '').toLowerCase())) continue;
+        if (BLOCK.test(tag)) {
+          const hasImg = st.images && el.querySelector('img');
+          if (el.textContent.trim().length > 30 || hasImg) {
+            const c = clean(el);
+            if (!st.images) c.querySelectorAll('img, picture').forEach(n => n.remove());
+            out += `<${tag}>${c.innerHTML}</${tag}>`;
+          }
+        } else if (tag === 'figure') {
+          if (st.images) {
+            out += `<figure class="_npimg">${clean(el).innerHTML}</figure>`;
+          } else {
+            const cap = el.querySelector('figcaption');
+            if (cap && cap.textContent.trim().length > 30) out += `<p class="_npcap">${cap.innerHTML}</p>`;
+          }
+        } else if (tag === 'img' || tag === 'picture') {
+          if (st.images && keepImg(el)) out += `<figure class="_npimg">${clean(el).outerHTML}</figure>`;
+        } else {
+          walk(el);
+        }
+      }
+    })(src);
+    if (!out) out = `<p>${(src.textContent || '').replace(/\s+/g, ' ').trim()}</p>`;
+    return out;
+  }
 
   // --- Geometry (recomputed on every layout change) ---
   const PAD = 60, GAP = 48, BARH = 44;
@@ -148,10 +196,7 @@ function toggleNewspaperColumns(S, MODE) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;overflow:hidden;';
 
   const clip = document.createElement('div');
-
   const inner = document.createElement('div');
-  inner.innerHTML = html + '<span id="_npcols_end" style="display:inline-block;width:0;height:0"></span>';
-
   const bar = document.createElement('div');
 
   const closeBtn = document.createElement('button');
@@ -159,10 +204,9 @@ function toggleNewspaperColumns(S, MODE) {
   closeBtn.onclick = doClose;
 
   const hintEl = document.createElement('span');
-  hintEl.textContent = 'Space / → turn · F font · −/+ size · C cols · B theme';
+  hintEl.textContent = 'Space / → turn · F font · −/+ size · C cols · B theme · I images';
 
   const progEl = document.createElement('span');
-
   bar.append(closeBtn, hintEl, progEl);
 
   const toast = document.createElement('div');
@@ -177,6 +221,7 @@ function toggleNewspaperColumns(S, MODE) {
   // --- Rendering ---
   function applyStyles() {
     const f = FONTS[st.font], t = THEMES[st.theme];
+    const maxImgH = Math.round(ch * 0.82);
     overlay.style.background = t.bg;
     clip.style.cssText =
       `position:absolute;top:${PAD}px;left:${PAD}px;width:${cw}px;height:${ch}px;overflow:hidden;`;
@@ -186,12 +231,13 @@ function toggleNewspaperColumns(S, MODE) {
       'orphans:4;widows:4;hyphens:auto;transition:transform .35s cubic-bezier(.4,0,.2,1);';
     bar.style.cssText =
       `position:absolute;bottom:0;left:0;right:0;height:${BARH}px;` +
-      'display:flex;align-items:center;justify-content:space-between;' +
+      'display:flex;align-items:center;justify-content:space-between;gap:16px;' +
       `padding:0 ${PAD}px;font-family:-apple-system,system-ui,sans-serif;font-size:12px;` +
       `color:${t.muted};border-top:1px solid ${t.rule};background:${t.bg};`;
     closeBtn.style.cssText =
       `background:none;border:1px solid ${t.rule};border-radius:4px;padding:3px 10px;` +
-      `cursor:pointer;font-size:12px;color:${t.muted};font-family:inherit;`;
+      `cursor:pointer;font-size:12px;color:${t.muted};font-family:inherit;white-space:nowrap;`;
+    hintEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     toast.style.background = t.fg;
     toast.style.color = t.bg;
     styleEl.textContent = [
@@ -201,6 +247,15 @@ function toggleNewspaperColumns(S, MODE) {
       '#_npcols p{margin:0 0 1em}',
       `#_npcols blockquote{border-left:3px solid ${t.bar};padding-left:1em;margin:0 0 1em;font-style:italic;color:${t.quote}}`,
       '#_npcols a{color:inherit;text-decoration:none}',
+      `#_npcols strong,#_npcols b{font-weight:700;color:${t.fg}}`,
+      '#_npcols em,#_npcols i{font-style:italic}',
+      `#_npcols mark{background:${t.hi};color:${t.fg};padding:0 .12em;border-radius:2px}`,
+      `#_npcols code{font-family:ui-monospace,Menlo,monospace;font-size:0.88em;background:${t.hi};padding:0 .25em;border-radius:3px}`,
+      `#_npcols ._npimg{margin:0.2em 0 1.1em;break-inside:avoid;-webkit-column-break-inside:avoid;text-align:center}`,
+      `#_npcols ._npimg img{display:block;max-width:100%;max-height:${maxImgH}px;width:auto;height:auto;margin:0 auto;border-radius:2px}`,
+      `#_npcols ._npimg svg{display:block;max-width:100%;max-height:${maxImgH}px;height:auto;margin:0 auto}`,
+      `#_npcols p ._npimg,#_npcols p img{max-width:100%}`,
+      `#_npcols figcaption,#_npcols ._npcap{font-size:0.8em;line-height:1.4;color:${t.muted};margin:0.45em 0 0;font-family:-apple-system,system-ui,sans-serif;font-style:normal}`,
       '#_npcols *{max-width:100%;box-sizing:border-box}',
     ].join('');
   }
@@ -226,18 +281,47 @@ function toggleNewspaperColumns(S, MODE) {
     updateProg();
   }
 
-  // Full re-layout after a settings or viewport change: keep the reader open,
-  // recompute geometry, clamp the current page, and re-measure.
+  // Re-clamp the current page and refresh the counter without moving the reader
+  // to the start — used after images load and change the total width.
+  function remeasure() {
+    const total = getTotal();
+    if (page >= total) page = total - 1;
+    if (page < 0) page = 0;
+    inner.style.transform = `translateX(${-page * pageW}px)`;
+    updateProg();
+  }
+
+  let remeasureRaf = 0;
+  function scheduleRemeasure() {
+    if (remeasureRaf) return;
+    remeasureRaf = requestAnimationFrame(() => { remeasureRaf = 0; remeasure(); });
+  }
+
+  // Full re-layout after a settings or viewport change.
   function relayout() {
     computeGeom();
     applyStyles();
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const total = getTotal();
-      if (page >= total) page = total - 1;
-      if (page < 0) page = 0;
-      inner.style.transform = `translateX(${-page * pageW}px)`;
-      updateProg();
-    }));
+    requestAnimationFrame(() => requestAnimationFrame(remeasure));
+  }
+
+  // Re-extract content (used when toggling images) and rebuild the flow.
+  function rebuild() {
+    inner.innerHTML = extract() + '<span id="_npcols_end" style="display:inline-block;width:0;height:0"></span>';
+    inner.querySelectorAll('img').forEach(im => {
+      im.addEventListener('load', scheduleRemeasure);
+      im.addEventListener('error', onImgError);
+    });
+    page = 0;
+    relayout();
+    // Safety net for images that finish loading after the initial measure.
+    setTimeout(remeasure, 700);
+    setTimeout(remeasure, 1800);
+  }
+
+  function onImgError() {
+    const fig = this.closest('._npimg');
+    if (fig) fig.remove(); else this.remove();
+    scheduleRemeasure();
   }
 
   let toastTimer = 0;
@@ -283,6 +367,9 @@ function toggleNewspaperColumns(S, MODE) {
       e.preventDefault();
       st.cols = st.cols >= 4 ? 0 : st.cols + 1; save(); relayout();
       flash('Columns · ' + (st.cols === 0 ? 'Auto (' + cols + ')' : st.cols));
+    } else if (k === 'i' || k === 'I') {
+      e.preventDefault();
+      st.images = st.images ? 0 : 1; save(); rebuild(); flash('Images · ' + (st.images ? 'on' : 'off'));
     } else if (k === '+' || k === '=') {
       e.preventDefault();
       st.size = Math.min(MAXS, st.size + 1); save(); relayout(); flash('Size · ' + st.size + 'px');
@@ -292,8 +379,7 @@ function toggleNewspaperColumns(S, MODE) {
     }
   }
 
-  applyStyles();
+  rebuild();
   document.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
-  requestAnimationFrame(() => requestAnimationFrame(updateProg));
 }
