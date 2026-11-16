@@ -158,6 +158,14 @@ function runReader(S, MODE) {
     const c = el.cloneNode(true);
     c.querySelectorAll('script, style, noscript, button, input').forEach(n => n.remove());
     unlazy(c);
+    // The overlay shares the page's document, so the site's own CSS would still
+    // act on copied class names and inline styles (e.g. stretching image wrapper
+    // boxes). Strip them; inline SVG charts keep theirs.
+    Array.from(c.querySelectorAll('*')).concat(c).forEach(n => {
+      if (n.closest('svg')) return;
+      n.removeAttribute('class');
+      n.removeAttribute('style');
+    });
     return c;
   }
   // Keep standalone images only if they render reasonably large (skips icons,
