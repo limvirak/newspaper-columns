@@ -77,7 +77,10 @@ chrome.action.onClicked.addListener((tab) => {
       target: { tabId: tab.id },
       func: toggleNewspaperColumns,
       args: [saved, 'chrome'],
-    }).then(() => {
+    }).then((results) => {
+      const r = results && results[0] ? results[0].result : undefined;
+      if (typeof r === 'string' && r.indexOf('error') === 0) { fail(new Error(r)); return; }
+      if (r === undefined) { fail(new Error('reader did not run (no result returned)')); return; }
       chrome.action.setBadgeText({ tabId: tab.id, text: '' });
       chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns' });
     }).catch(fail);

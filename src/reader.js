@@ -12,9 +12,19 @@
 // S    = initial settings object (extension passes stored settings; bookmarklet passes null)
 // MODE = 'chrome' (persist via chrome.storage.local) or 'local' (persist via localStorage)
 function toggleNewspaperColumns(S, MODE) {
+  // Returns 'opened' | 'closed' | 'error: ...' so the extension can report a
+  // failure inside the page instead of failing silently.
+  try {
+    return runReader(S, MODE);
+  } catch (e) {
+    console.error('Newspaper Columns:', e);
+    return 'error: ' + (e && e.message ? e.message : e);
+  }
+
+function runReader(S, MODE) {
 
   const ex = document.getElementById('_npcols');
-  if (ex) { document.body.removeChild(ex); return; }
+  if (ex) { document.body.removeChild(ex); return 'closed'; }
 
   // --- Settings ---
   const FONTS = [
@@ -338,4 +348,7 @@ function toggleNewspaperColumns(S, MODE) {
   rebuild();
   document.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
+  return 'opened';
+}
+
 }
