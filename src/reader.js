@@ -12,19 +12,40 @@
 // S    = initial settings object (extension passes stored settings; bookmarklet passes null)
 // MODE = 'chrome' (persist via chrome.storage.local) or 'local' (persist via localStorage)
 function toggleNewspaperColumns(S, MODE) {
-  // Returns 'opened' | 'closed' | 'error: ...' so the extension can report a
-  // failure inside the page instead of failing silently.
-  try {
-    return runReader(S, MODE);
-  } catch (e) {
+  // Returns 'opened' | 'closed' | 'error: ...' (or a Promise of one in chrome
+  // mode) so the extension can report a failure instead of failing silently.
+  function fail(e) {
     console.error('Newspaper Columns:', e);
     return 'error: ' + (e && e.message ? e.message : e);
   }
+  try {
+    const ex = document.getElementById('_npcols');
+    if (ex) {
+      if (typeof window.__npcolsClose === 'function') window.__npcolsClose(); else ex.remove();
+      return 'closed';
+    }
+    if (MODE === 'chrome') {
+      // Settings are read here in the page so the toolbar click handler can
+      // inject immediately (no async work between the click and the injection).
+      return new Promise(resolve => {
+        let done = false;
+        const go = (saved) => {
+          if (done) return;
+          done = true;
+          try { resolve(runReader(saved, MODE)); } catch (e) { resolve(fail(e)); }
+        };
+        try {
+          chrome.storage.local.get('_npcols', d => go(!chrome.runtime.lastError && d && d._npcols ? d._npcols : null));
+        } catch (e) { go(null); }
+        setTimeout(() => go(null), 1500);
+      });
+    }
+    return runReader(S, MODE);
+  } catch (e) {
+    return fail(e);
+  }
 
 function runReader(S, MODE) {
-
-  const ex = document.getElementById('_npcols');
-  if (ex) { document.body.removeChild(ex); return 'closed'; }
 
   // --- Settings ---
   const FONTS = [
@@ -324,9 +345,10 @@ function runReader(S, MODE) {
   }
 
   function doClose() {
-    if (document.getElementById('_npcols')) document.body.removeChild(overlay);
+    overlay.remove();
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
+    if (window.__npcolsClose === doClose) window.__npcolsClose = null;
   }
 
   let resizeRaf = 0;
@@ -336,7 +358,7 @@ function runReader(S, MODE) {
   }
 
   function onKey(e) {
-    if (!document.getElementById('_npcols')) {
+    if (!overlay.isConnected) {
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
       return;
@@ -373,6 +395,7 @@ function runReader(S, MODE) {
   rebuild();
   document.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
+  window.__npcolsClose = doClose;
   return 'opened';
 }
 

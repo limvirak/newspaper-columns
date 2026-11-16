@@ -72,27 +72,18 @@ chrome.action.onClicked.addListener((tab) => {
     chrome.action.setBadgeText({ tabId: tab.id, text: '!' });
     chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns could not run here: ' + msg });
   };
-  const run = (saved) => {
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: toggleNewspaperColumns,
-      args: [saved, 'chrome'],
-    }).then((results) => {
-      const r = results && results[0] ? results[0].result : undefined;
-      if (typeof r === 'string' && r.indexOf('error') === 0) { fail(new Error(r)); return; }
-      if (r === undefined) { fail(new Error('reader did not run (no result returned)')); return; }
-      chrome.action.setBadgeText({ tabId: tab.id, text: '' });
-      chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns' });
-    }).catch(fail);
-  };
-  try {
-    chrome.storage.local.get('_npcols', (data) => {
-      // A storage error must not block the reader; fall back to defaults.
-      run(!chrome.runtime.lastError && data && data._npcols ? data._npcols : null);
-    });
-  } catch (e) {
-    run(null);
-  }
+  // Inject straight away (as v1 did); the reader loads saved settings itself.
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: toggleNewspaperColumns,
+    args: [null, 'chrome'],
+  }).then((results) => {
+    const r = results && results[0] ? results[0].result : undefined;
+    if (typeof r === 'string' && r.indexOf('error') === 0) { fail(new Error(r)); return; }
+    if (r === undefined) { fail(new Error('reader did not run (no result returned)')); return; }
+    chrome.action.setBadgeText({ tabId: tab.id, text: '' });
+    chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns' });
+  }).catch(fail);
 });
 
 // ---------------------------------------------------------------------------
