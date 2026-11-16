@@ -62,28 +62,14 @@ setIcon();
 // Toolbar button click (shortcut via _execute_action fires this too).
 // Load saved settings first, then inject the reader with them as an argument
 // so there's no first-paint flash of default styling.
-// Failures are surfaced (red "!" badge + tooltip + console) instead of silent.
 chrome.action.onClicked.addListener((tab) => {
-  if (!tab || tab.id == null) return;
-  const fail = (err) => {
-    const msg = (err && err.message) || String(err);
-    console.error('Newspaper Columns: could not start reader:', msg);
-    chrome.action.setBadgeBackgroundColor({ color: '#b3261e' });
-    chrome.action.setBadgeText({ tabId: tab.id, text: '!' });
-    chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns could not run here: ' + msg });
-  };
-  // Inject straight away (as v1 did); the reader loads saved settings itself.
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: toggleNewspaperColumns,
-    args: [null, 'chrome'],
-  }).then((results) => {
-    const r = results && results[0] ? results[0].result : undefined;
-    if (typeof r === 'string' && r.indexOf('error') === 0) { fail(new Error(r)); return; }
-    if (r === undefined) { fail(new Error('reader did not run (no result returned)')); return; }
-    chrome.action.setBadgeText({ tabId: tab.id, text: '' });
-    chrome.action.setTitle({ tabId: tab.id, title: 'Newspaper Columns' });
-  }).catch(fail);
+  chrome.storage.local.get('_npcols', (data) => {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: toggleNewspaperColumns,
+      args: [data && data._npcols ? data._npcols : null, 'chrome'],
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

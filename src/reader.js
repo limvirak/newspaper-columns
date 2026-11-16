@@ -12,40 +12,9 @@
 // S    = initial settings object (extension passes stored settings; bookmarklet passes null)
 // MODE = 'chrome' (persist via chrome.storage.local) or 'local' (persist via localStorage)
 function toggleNewspaperColumns(S, MODE) {
-  // Returns 'opened' | 'closed' | 'error: ...' (or a Promise of one in chrome
-  // mode) so the extension can report a failure instead of failing silently.
-  function fail(e) {
-    console.error('Newspaper Columns:', e);
-    return 'error: ' + (e && e.message ? e.message : e);
-  }
-  try {
-    const ex = document.getElementById('_npcols');
-    if (ex) {
-      if (typeof window.__npcolsClose === 'function') window.__npcolsClose(); else ex.remove();
-      return 'closed';
-    }
-    if (MODE === 'chrome') {
-      // Settings are read here in the page so the toolbar click handler can
-      // inject immediately (no async work between the click and the injection).
-      return new Promise(resolve => {
-        let done = false;
-        const go = (saved) => {
-          if (done) return;
-          done = true;
-          try { resolve(runReader(saved, MODE)); } catch (e) { resolve(fail(e)); }
-        };
-        try {
-          chrome.storage.local.get('_npcols', d => go(!chrome.runtime.lastError && d && d._npcols ? d._npcols : null));
-        } catch (e) { go(null); }
-        setTimeout(() => go(null), 1500);
-      });
-    }
-    return runReader(S, MODE);
-  } catch (e) {
-    return fail(e);
-  }
 
-function runReader(S, MODE) {
+  const ex = document.getElementById('_npcols');
+  if (ex) { document.body.removeChild(ex); return; }
 
   // --- Settings ---
   const FONTS = [
@@ -92,8 +61,8 @@ function runReader(S, MODE) {
   // blockquotes, figures) are emitted whole so their inline emphasis
   // (<strong>, <em>, <mark>, links) is preserved; other containers are
   // descended into so standalone images aren't missed.
-  const noise = /advert|promo|related|share|social|newsletter|subscri|sidebar|widget|banner|cookie|comment|disqus|taboola|outbrain|newsletter|paywall|metadata|byline/;
-  const SKIP = /^(nav|aside|footer|form|script|style|noscript|iframe|video|audio|embed|canvas|button|input|select|textarea)$/;
+  const noise = /advert|promo|related|share|social|newsletter|subscri|sidebar|widget|banner|cookie|comment|disqus|taboola|outbrain|metadata|byline/;
+  const SKIP = /^(nav|aside|header|footer|form|script|style|noscript|iframe|video|audio|embed|canvas|button|input|select|textarea)$/;
   const BLOCK = /^(h[1-6]|p|blockquote)$/;
 
   // Copy real image URLs out of lazy-loading attributes onto src/srcset.
@@ -112,23 +81,10 @@ function runReader(S, MODE) {
     const c = el.cloneNode(true);
     c.querySelectorAll('script, style, noscript, button, input').forEach(n => n.remove());
     unlazy(c);
-    // The overlay shares the page's document, so the site's own CSS would still
-    // act on copied class names and inline styles (e.g. stretching image wrapper
-    // boxes). Strip them; inline SVG charts keep theirs.
-    Array.from(c.querySelectorAll('*')).concat(c).forEach(n => {
-      if (n.closest('svg')) return;
-      n.removeAttribute('class');
-      n.removeAttribute('style');
-    });
     return c;
   }
   // Keep standalone images only if they render reasonably large (skips icons,
   // tracking pixels, logos) or sit inside a <figure>.
-  // Inline SVG counts as a chart only if it is chart-sized (skips icons, logos, dividers).
-  function bigSvg(el) {
-    const r = el.getBoundingClientRect();
-    return r.width >= 120 && r.height >= 80;
-  }
   function keepImg(el) {
     const r = el.getBoundingClientRect();
     return (r.width >= 120 && r.height >= 80) || !!el.closest('figure');
@@ -140,23 +96,13 @@ function runReader(S, MODE) {
       '.post-content, .entry-content, .content-body, main'
     ) || document.body;
     let out = '';
-    if (!src.querySelector('h1')) {
-      const h = document.querySelector('h1');
-      if (h && h.textContent.trim().length > 3 && !h.closest('nav, footer, aside') && h.getBoundingClientRect().width > 0) {
-        out += `<h1>${clean(h).innerHTML.trim()}</h1>`;
-      }
-    }
     (function walk(node) {
       const kids = node.children;
       for (let i = 0; i < kids.length; i++) {
         const el = kids[i];
         const tag = el.tagName.toLowerCase();
         if (tag === 'svg') {
-          if (st.images && bigSvg(el)) out += `<figure class="_npimg">${el.outerHTML}</figure>`;
-          continue;
-        }
-        if (tag === 'header') {
-          if (node !== document.body && el.querySelector('h1, figure, picture, img')) walk(el);
+          if (st.images && el.getBoundingClientRect().width >= 120) out += `<figure class="_npimg">${el.outerHTML}</figure>`;
           continue;
         }
         if (SKIP.test(tag)) continue;
@@ -171,9 +117,7 @@ function runReader(S, MODE) {
           }
         } else if (tag === 'figure') {
           if (st.images) {
-            const hasPic = el.querySelector('img, picture');
-            const hasChart = !hasPic && Array.from(el.querySelectorAll('svg')).some(bigSvg);
-            if (hasPic || hasChart) out += `<figure class="_npimg">${clean(el).innerHTML}</figure>`;
+            out += `<figure class="_npimg">${clean(el).innerHTML}</figure>`;
           } else {
             const cap = el.querySelector('figcaption');
             if (cap && cap.textContent.trim().length > 30) out += `<p class="_npcap">${cap.innerHTML}</p>`;
@@ -345,10 +289,9 @@ function runReader(S, MODE) {
   }
 
   function doClose() {
-    overlay.remove();
+    if (document.getElementById('_npcols')) document.body.removeChild(overlay);
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
-    if (window.__npcolsClose === doClose) window.__npcolsClose = null;
   }
 
   let resizeRaf = 0;
@@ -358,7 +301,7 @@ function runReader(S, MODE) {
   }
 
   function onKey(e) {
-    if (!overlay.isConnected) {
+    if (!document.getElementById('_npcols')) {
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
       return;
@@ -395,8 +338,4 @@ function runReader(S, MODE) {
   rebuild();
   document.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
-  window.__npcolsClose = doClose;
-  return 'opened';
-}
-
 }
