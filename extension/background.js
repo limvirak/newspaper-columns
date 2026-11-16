@@ -139,7 +139,7 @@ function runReader(S, MODE) {
   // (<strong>, <em>, <mark>, links) is preserved; other containers are
   // descended into so standalone images aren't missed.
   const noise = /advert|promo|related|share|social|newsletter|subscri|sidebar|widget|banner|cookie|comment|disqus|taboola|outbrain|newsletter|paywall|metadata|byline/;
-  const SKIP = /^(nav|aside|header|footer|form|script|style|noscript|iframe|video|audio|embed|canvas|button|input|select|textarea)$/;
+  const SKIP = /^(nav|aside|footer|form|script|style|noscript|iframe|video|audio|embed|canvas|button|input|select|textarea)$/;
   const BLOCK = /^(h[1-6]|p|blockquote)$/;
 
   // Copy real image URLs out of lazy-loading attributes onto src/srcset.
@@ -162,6 +162,11 @@ function runReader(S, MODE) {
   }
   // Keep standalone images only if they render reasonably large (skips icons,
   // tracking pixels, logos) or sit inside a <figure>.
+  // Inline SVG counts as a chart only if it is chart-sized (skips icons, logos, dividers).
+  function bigSvg(el) {
+    const r = el.getBoundingClientRect();
+    return r.width >= 120 && r.height >= 80;
+  }
   function keepImg(el) {
     const r = el.getBoundingClientRect();
     return (r.width >= 120 && r.height >= 80) || !!el.closest('figure');
@@ -173,13 +178,23 @@ function runReader(S, MODE) {
       '.post-content, .entry-content, .content-body, main'
     ) || document.body;
     let out = '';
+    if (!src.querySelector('h1')) {
+      const h = document.querySelector('h1');
+      if (h && h.textContent.trim().length > 3 && !h.closest('nav, footer, aside') && h.getBoundingClientRect().width > 0) {
+        out += `<h1>${clean(h).innerHTML.trim()}</h1>`;
+      }
+    }
     (function walk(node) {
       const kids = node.children;
       for (let i = 0; i < kids.length; i++) {
         const el = kids[i];
         const tag = el.tagName.toLowerCase();
         if (tag === 'svg') {
-          if (st.images && el.getBoundingClientRect().width >= 120) out += `<figure class="_npimg">${el.outerHTML}</figure>`;
+          if (st.images && bigSvg(el)) out += `<figure class="_npimg">${el.outerHTML}</figure>`;
+          continue;
+        }
+        if (tag === 'header') {
+          if (node !== document.body && el.querySelector('h1, figure, picture, img')) walk(el);
           continue;
         }
         if (SKIP.test(tag)) continue;
@@ -194,7 +209,9 @@ function runReader(S, MODE) {
           }
         } else if (tag === 'figure') {
           if (st.images) {
-            out += `<figure class="_npimg">${clean(el).innerHTML}</figure>`;
+            const hasPic = el.querySelector('img, picture');
+            const hasChart = !hasPic && Array.from(el.querySelectorAll('svg')).some(bigSvg);
+            if (hasPic || hasChart) out += `<figure class="_npimg">${clean(el).innerHTML}</figure>`;
           } else {
             const cap = el.querySelector('figcaption');
             if (cap && cap.textContent.trim().length > 30) out += `<p class="_npcap">${cap.innerHTML}</p>`;
