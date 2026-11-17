@@ -27,13 +27,13 @@ chrome.runtime.onStartup.addListener(setIcon);
 setIcon();
 
 // Toolbar button click (shortcut via _execute_action fires this too).
-// Inject straight away with default settings. (Reading saved settings from
-// storage before injecting coincided with the "works once, then not" bug.)
+// Inject straight away. Settings persist via the page's localStorage ('local' mode),
+// so there is no chrome.storage read before injecting (that coincided with the works-once bug).
 chrome.action.onClicked.addListener((tab) => {
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: toggleNewspaperColumns,
-    args: [null, 'chrome'],
+    args: [null, 'local'],
   });
 });
 
