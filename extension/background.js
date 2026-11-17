@@ -27,15 +27,13 @@ chrome.runtime.onStartup.addListener(setIcon);
 setIcon();
 
 // Toolbar button click (shortcut via _execute_action fires this too).
-// Load saved settings first, then inject the reader with them as an argument
-// so there's no first-paint flash of default styling.
+// Inject straight away with default settings. (Reading saved settings from
+// storage before injecting coincided with the "works once, then not" bug.)
 chrome.action.onClicked.addListener((tab) => {
-  chrome.storage.local.get('_npcols', (data) => {
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: toggleNewspaperColumns,
-      args: [data && data._npcols ? data._npcols : null, 'chrome'],
-    });
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: toggleNewspaperColumns,
+    args: [null, 'chrome'],
   });
 });
 
