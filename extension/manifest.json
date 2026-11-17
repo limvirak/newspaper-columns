@@ -2,8 +2,12 @@
   "manifest_version": 3,
   "name": "Newspaper Columns",
   "version": "1.1.2",
-  "description": "Read any article in a paginated newspaper-column layout. Alt+R to toggle; F/−+/C/B to adjust font, size, columns, theme.",
-  "permissions": ["scripting","activeTab"],
+  "description": "Read any article in a paginated newspaper-column layout. Alt+R to toggle; F/\u2212+/C/B to adjust font, size, columns, theme.",
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "storage"
+  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {
@@ -17,6 +21,6 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Newspaper Columns (Alt+R — customise in chrome://extensions/shortcuts)"
+    "default_title": "Newspaper Columns (Alt+R \u2014 customise in chrome://extensions/shortcuts)"
   }
 }
