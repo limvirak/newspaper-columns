@@ -75,14 +75,21 @@ function toggleNewspaperColumns(S, MODE) {
 
   function load() {
     let saved = {};
-    if (MODE === 'local') {
-      try { saved = JSON.parse(localStorage.getItem('_npcols') || '{}'); } catch (e) { saved = {}; }
-    } else {
-      saved = S || {};
-    }
-    const out = Object.assign({}, DEFAULTS, saved);
-    out.font = (out.font % FONTS.length + FONTS.length) % FONTS.length;
-    out.theme = (out.theme % THEMES.length + THEMES.length) % THEMES.length;
+    try {
+      if (MODE === 'local') {
+        saved = JSON.parse(localStorage.getItem('_npcols') || '{}');
+      } else {
+        saved = S || {};
+      }
+    } catch (e) { saved = {}; }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
+    const out = Object.assign({}, DEFAULTS);
+    Object.keys(DEFAULTS).forEach(k => {
+      const n = Number(saved[k]);
+      if (saved[k] !== null && saved[k] !== '' && Number.isFinite(n)) out[k] = n;
+    });
+    out.font = (out.font % FONTS.length + FONTS.length) % FONTS.length | 0;
+    out.theme = (out.theme % THEMES.length + THEMES.length) % THEMES.length | 0;
     out.size = Math.min(MAXS, Math.max(MINS, out.size | 0));
     out.cols = Math.min(6, Math.max(0, out.cols | 0));
     out.images = out.images ? 1 : 0;
